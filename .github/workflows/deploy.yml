@@ -22,15 +22,6 @@ on:
       ORG_DEPLOY_TOKEN:
         description: 'GitHub token for deployment'
         required: true
-      ORG_AWS_ACCESS_KEY_ID:
-        description: 'AWS Access Key ID for S3 sync'
-        required: false
-      ORG_AWS_SECRET_ACCESS_KEY:
-        description: 'AWS Secret Access Key for S3 sync'
-        required: false
-      ORG_AWS_SESSION_TOKEN:
-        description: 'AWS Session Token for S3 sync (if using temporary credentials)'
-        required: false
 
 jobs:
   deploy-to-book-server:
@@ -302,6 +293,9 @@ jobs:
 
   sync-media-to-s3:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Allows the workflow to get an OIDC token
+      contents: read   # Needed for checkout
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -316,9 +310,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.ORG_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.ORG_AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.ORG_AWS_SESSION_TOKEN }}
+          role-to-assume: arn:aws:iam::381492306053:role/GitHubActionsS3Access
           aws-region: ${{ steps.config.outputs.region }}
 
       - name: Sync media to S3
