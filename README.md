@@ -17,14 +17,30 @@ on:
 
 jobs:
   deploy:
-    # Use the reusable workflow from the electric-book-deploy-workflow repository
+    uses: electricbookworks/electric-book-deploy-workflow/.github/workflows/deploy.yml@{release-version}
+    secrets: inherit
+```
+
+Replace `{release-version}` with the latest release (e.g. `v1.0.1`), unless you want to use an older version.
+
+You can also add optional inputs to customise the Ruby and Node versions, as well as the config file location:
+
+```yaml
+name: Deploy to Electric Book Server and S3
+
+on:
+  push: # Trigger on any push, but branch validation will filter
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  deploy:
     uses: electricbookworks/electric-book-deploy-workflow/.github/workflows/deploy.yml@{release-version}
     with:
-      config-file: '.github/workflows/deploy.config.json'
+      config-file: '.github/workflows/deploy.config.json' # optional - defaults to '.github/workflows/deploy.config.json'
       node-version: '22' # optional - defaults to 22
       ruby-version: '3.1' # optional - defaults to 3.1
+    secrets: inherit
 ```
-Replace `{release-version}` with the latest release (e.g. `v1.0.0`), unless you want to use an older version.
 
 ### 2. Create your deployment configuration
 
