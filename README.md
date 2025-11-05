@@ -1,6 +1,6 @@
 # Electric Book Deploy Workflow Plugin
 
-This deploy workflow plugin gets used by Electric Book projects with automated deploys to an Electric Book Server instance.
+This deploy workflow plugin gets used by Electric Book projects and media repos with automated deploys to an Electric Book Server instance and/or S3 buckets.
 
 ## Adding the workflow to your project repository
 
