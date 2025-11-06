@@ -38,6 +38,15 @@ jobs:
         # Load configuration from JSON file
         CONFIG_FILE="${{ inputs.config-file }}"
         if [ -f "$CONFIG_FILE" ]; then
+          # Check if book-server configuration exists
+          BOOK_SERVER_EXISTS=$(cat "$CONFIG_FILE" | jq -r 'has("book-server")')
+          if [[ "${BOOK_SERVER_EXISTS}" != "true" ]]; then
+            echo "📚 No book-server configuration found in ${CONFIG_FILE}"
+            echo "Skipping book server deployment."
+            echo "SKIP_BOOK_SERVER=true" >> $GITHUB_ENV
+            exit 0
+          fi
+          
           # Parse JSON and extract values from book-server section
           DEPLOY_REPO=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].repo')
           DEPLOY_BRANCHES=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].branches | join(",")')
@@ -53,6 +62,7 @@ jobs:
           echo "DEPLOY_CONFIGS=${DEPLOY_CONFIGS}" >> $GITHUB_ENV
           echo "BUILD_DIRS=${BUILD_DIRS}" >> $GITHUB_ENV
           echo "BUILD_CONFIGS=${BUILD_CONFIGS}" >> $GITHUB_ENV
+          echo "SKIP_BOOK_SERVER=false" >> $GITHUB_ENV
           
           echo "✅ Loaded deployment configuration:"
           echo "  Config file: ${CONFIG_FILE}"
@@ -69,6 +79,12 @@ jobs:
 
     - name: Check for builds
       run: |
+        # Skip if no book-server config
+        if [[ "${SKIP_BOOK_SERVER}" == "true" ]]; then
+          echo "📚 Skipping builds check - no book-server configuration"
+          exit 0
+        fi
+        
         # Check if builds array has at least one entry
         CONFIG_FILE="${{ inputs.config-file }}"
         BUILD_COUNT=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | length')
@@ -84,6 +100,13 @@ jobs:
     - name: Check if branch is allowed for deployment
       id: check-branch
       run: |
+        # Skip if no book-server config
+        if [[ "${SKIP_BOOK_SERVER}" == "true" ]]; then
+          echo "📚 Skipping branch check - no book-server configuration"
+          echo "should_deploy=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
         CURRENT_BRANCH="${{ github.ref_name }}"
         IFS=',' read -ra ALLOWED <<< "${DEPLOY_BRANCHES}"
         BRANCH_ALLOWED=false
@@ -304,16 +327,41 @@ jobs:
         id: config
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
+          
+          # Check if media configuration exists
+          MEDIA_EXISTS=$(cat $CONFIG_FILE | jq -r 'has("media")')
+          if [[ "${MEDIA_EXISTS}" != "true" ]]; then
+            echo "📁 No media configuration found in ${CONFIG_FILE}"
+            echo "Skipping media sync."
+            echo "skip_media=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if there are any sync entries
+          SYNC_COUNT=$(cat $CONFIG_FILE | jq -r '.media.syncs | length')
+          if [[ "${SYNC_COUNT}" -eq 0 ]]; then
+            echo "📁 No media syncs configured in ${CONFIG_FILE}"
+            echo "Skipping media sync."
+            echo "skip_media=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           echo "config=$(cat $CONFIG_FILE | jq -c .)" >> $GITHUB_OUTPUT
           echo "region=$(cat $CONFIG_FILE | jq -r '.media.region')" >> $GITHUB_OUTPUT
+          echo "skip_media=false" >> $GITHUB_OUTPUT
+          
+          echo "✅ Media configuration validated:"
+          echo "  Sync count: ${SYNC_COUNT}"
 
       - name: Configure AWS credentials
+        if: steps.config.outputs.skip_media != 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::381492306053:role/GitHubActionsS3Access
           aws-region: ${{ steps.config.outputs.region }}
 
       - name: Sync media to S3
+        if: steps.config.outputs.skip_media != 'true'
         run: |
           # Check if current branch is live or staging (only these trigger media syncs)
           CURRENT_BRANCH="${{ github.ref_name }}"
