@@ -383,7 +383,7 @@ jobs:
           fi
           
           # Parse media configuration and sync each entry
-          echo '${{ steps.config.outputs.config }}' | jq -r '.media.syncs[] | "\(.bucket) \(.source) \(.destination) \(.options)"' | while read bucket source dest options; do
+          echo '${{ steps.config.outputs.config }}' | jq -r '.media.syncs[] | [.bucket, .source, .destination, .options] | @tsv' | while IFS=$'\t' read -r bucket source dest options; do
             # Add suffix to bucket name based on branch
             if [ "$CURRENT_BRANCH" = "live" ]; then
               bucket="${bucket}-live"
