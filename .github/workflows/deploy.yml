@@ -38,10 +38,11 @@ jobs:
       target_branch: ${{ steps.check_branch.outputs.target_branch }}
 
     steps:
-    - name: Checkout source repository
+    - name: Checkout config file
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0
+        sparse-checkout: ${{ inputs.config-file }}
+        fetch-depth: 1
 
     - name: Load deployment configuration
       id: load_config
@@ -234,8 +235,11 @@ jobs:
       region: ${{ steps.check_media.outputs.region }}
       config: ${{ steps.check_media.outputs.config }}
     steps:
-      - name: Checkout repository
+      - name: Checkout config file
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: ${{ inputs.config-file }}
+          fetch-depth: 1
 
       - name: Check for media sync
         id: check_media
@@ -286,5 +290,6 @@ jobs:
               bucket="${bucket}-staging"
             fi
             echo "Syncing $source to s3://$bucket/$dest/ with options: $options"
-            aws s3 sync "$source/" "s3://$bucket/$dest/" $options
+            # Use eval to correctly handle the options string with its quotes
+            eval "aws s3 sync '$source/' 's3://$bucket/$dest/' $options"
           done
