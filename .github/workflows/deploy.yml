@@ -16,7 +16,7 @@ on:
       ruby-version:
         description: 'Ruby version to use'
         required: false
-        default: '3.1'
+        default: '3.2'
         type: string
     secrets:
       ORG_DEPLOY_TOKEN:
