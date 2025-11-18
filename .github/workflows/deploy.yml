@@ -24,9 +24,19 @@ on:
         required: true
 
 jobs:
-  deploy-to-book-server:
+  pre-check:
     runs-on: ubuntu-latest
-    
+    outputs:
+      skip_book_server: ${{ steps.check_config.outputs.skip_book_server }}
+      should_build: ${{ steps.check_builds.outputs.should_build }}
+      should_deploy: ${{ steps.check_branch.outputs.should_deploy }}
+      deploy_repo: ${{ steps.load_config.outputs.deploy_repo }}
+      deploy_branches: ${{ steps.load_config.outputs.deploy_branches }}
+      deploy_configs: ${{ steps.load_config.outputs.deploy_configs }}
+      build_dirs: ${{ steps.load_config.outputs.build_dirs }}
+      build_configs: ${{ steps.load_config.outputs.build_configs }}
+      target_branch: ${{ steps.check_branch.outputs.target_branch }}
+
     steps:
     - name: Checkout source repository
       uses: actions/checkout@v4
@@ -34,94 +44,53 @@ jobs:
         fetch-depth: 0
 
     - name: Load deployment configuration
+      id: load_config
       run: |
-        # Load configuration from JSON file
         CONFIG_FILE="${{ inputs.config-file }}"
-        if [ -f "$CONFIG_FILE" ]; then
-          # Check if book-server configuration exists
-          BOOK_SERVER_EXISTS=$(cat "$CONFIG_FILE" | jq -r 'has("book-server")')
-          if [[ "${BOOK_SERVER_EXISTS}" != "true" ]]; then
-            echo "📚 No book-server configuration found in ${CONFIG_FILE}"
-            echo "Skipping book server deployment."
-            echo "SKIP_BOOK_SERVER=true" >> $GITHUB_ENV
-            exit 0
-          fi
-          
-          # Parse JSON and extract values from book-server section
-          DEPLOY_REPO=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].repo')
-          DEPLOY_BRANCHES=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].branches | join(",")')
-          DEPLOY_CONFIGS=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].configs | join(",")')
-          
-          # Extract build configurations
-          BUILD_DIRS=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | map(.dir) | join(",")')
-          BUILD_CONFIGS=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | map(.configs | if length > 0 then join(",") else " " end) | join(";")')
-          
-          # Export to GitHub environment
-          echo "DEPLOY_BRANCHES=${DEPLOY_BRANCHES}" >> $GITHUB_ENV
-          echo "DEPLOY_REPO=${DEPLOY_REPO}" >> $GITHUB_ENV
-          echo "DEPLOY_CONFIGS=${DEPLOY_CONFIGS}" >> $GITHUB_ENV
-          echo "BUILD_DIRS=${BUILD_DIRS}" >> $GITHUB_ENV
-          echo "BUILD_CONFIGS=${BUILD_CONFIGS}" >> $GITHUB_ENV
-          echo "SKIP_BOOK_SERVER=false" >> $GITHUB_ENV
-          
-          echo "✅ Loaded deployment configuration:"
-          echo "  Config file: ${CONFIG_FILE}"
-          echo "  Build directories: ${BUILD_DIRS}"
-          echo "  Build configs: ${BUILD_CONFIGS}"
-          echo "  Allowed branches: ${DEPLOY_BRANCHES}"
-          echo "  Target repo: ${DEPLOY_REPO}"
-          echo "  Deploy configs: ${DEPLOY_CONFIGS}"
-        else
+        if [ ! -f "$CONFIG_FILE" ]; then
           echo "❌ ERROR: $CONFIG_FILE file not found"
-          echo "Make sure the deploy.config.json file exists in your repository"
           exit 1
         fi
+        
+        BOOK_SERVER_EXISTS=$(jq -r 'has("book-server")' "$CONFIG_FILE")
+        if [[ "${BOOK_SERVER_EXISTS}" != "true" ]]; then
+          echo "📚 No book-server configuration found, skipping deployment."
+          echo "skip_book_server=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+        
+        DEPLOY_REPO=$(jq -r '.["book-server"].repo' "$CONFIG_FILE")
+        DEPLOY_BRANCHES=$(jq -r '.["book-server"].branches | join(",")' "$CONFIG_FILE")
+        DEPLOY_CONFIGS=$(jq -r '.["book-server"].configs | join(",")' "$CONFIG_FILE")
+        BUILD_DIRS=$(jq -r '.["book-server"].builds | map(.dir) | join(",")' "$CONFIG_FILE")
+        BUILD_CONFIGS=$(jq -r '.["book-server"].builds | map(.configs | if length > 0 then join(",") else " " end) | join(";")' "$CONFIG_FILE")
+        
+        echo "deploy_repo=${DEPLOY_REPO}" >> $GITHUB_OUTPUT
+        echo "deploy_branches=${DEPLOY_BRANCHES}" >> $GITHUB_OUTPUT
+        echo "deploy_configs=${DEPLOY_CONFIGS}" >> $GITHUB_OUTPUT
+        echo "build_dirs=${BUILD_DIRS}" >> $GITHUB_OUTPUT
+        echo "build_configs=${BUILD_CONFIGS}" >> $GITHUB_OUTPUT
+        echo "skip_book_server=false" >> $GITHUB_OUTPUT
 
     - name: Check for builds
-      id: check-builds
+      id: check_builds
+      if: steps.load_config.outputs.skip_book_server == 'false'
       run: |
-        # Skip if no book-server config
-        if [[ "${SKIP_BOOK_SERVER}" == "true" ]]; then
-          echo "📚 Skipping builds check - no book-server configuration"
-          echo "should_build=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-        
-        # Check if builds array has at least one entry
-        CONFIG_FILE="${{ inputs.config-file }}"
-        BUILD_COUNT=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | length')
+        BUILD_COUNT=$(jq -r '.["book-server"].builds | length' "${{ inputs.config-file }}")
         if [[ "${BUILD_COUNT}" -eq 0 ]]; then
-          echo "🧱 No builds configured in ${CONFIG_FILE}"
-          echo "Skipping build deployment."
+          echo "🧱 No builds configured, skipping deployment."
           echo "should_build=false" >> $GITHUB_OUTPUT
-          exit 0
+        else
+          echo "should_build=true" >> $GITHUB_OUTPUT
         fi
-        
-        echo "✅ Build configuration validated:"
-        echo "  Build count: ${BUILD_COUNT}"
-        echo "should_build=true" >> $GITHUB_OUTPUT
 
     - name: Check if branch is allowed for deployment
-      id: check-branch
+      id: check_branch
+      if: steps.check_builds.outputs.should_build == 'true'
       run: |
-        # Skip if no book-server config
-        if [[ "${SKIP_BOOK_SERVER}" == "true" ]]; then
-          echo "📚 Skipping branch check - no book-server configuration"
-          echo "should_deploy=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-        
-        # Skip if no builds configured
-        if [[ "${{ steps.check-builds.outputs.should_build }}" == "false" ]]; then
-          echo "🧱 Skipping branch check - no builds configured"
-          echo "should_deploy=false" >> $GITHUB_OUTPUT
-          exit 0
-        fi
-        
         CURRENT_BRANCH="${{ github.ref_name }}"
-        IFS=',' read -ra ALLOWED <<< "${DEPLOY_BRANCHES}"
+        IFS=',' read -ra ALLOWED <<< "${{ steps.load_config.outputs.deploy_branches }}"
         BRANCH_ALLOWED=false
-        
         for branch in "${ALLOWED[@]}"; do
           if [[ "${CURRENT_BRANCH}" == "${branch// /}" ]]; then
             BRANCH_ALLOWED=true
@@ -130,183 +99,117 @@ jobs:
         done
         
         if [[ "${BRANCH_ALLOWED}" == "false" ]]; then
-          echo "❌ Branch '${CURRENT_BRANCH}' is not in the allowed branches list: ${DEPLOY_BRANCHES}"
-          echo "Skipping deployment."
+          echo "❌ Branch '${CURRENT_BRANCH}' is not allowed, skipping deployment."
           echo "should_deploy=false" >> $GITHUB_OUTPUT
-          exit 0
+        else
+          echo "✅ Branch '${CURRENT_BRANCH}' is allowed for deployment."
+          echo "should_deploy=true" >> $GITHUB_OUTPUT
         fi
-        
-        echo "✅ Branch '${CURRENT_BRANCH}' is allowed for deployment"
-        echo "should_deploy=true" >> $GITHUB_OUTPUT
+
+  deploy-to-book-server:
+    needs: pre-check
+    if: needs.pre-check.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout source repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Setup Node.js
-      if: steps.check-branch.outputs.should_deploy == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
         cache: 'npm'
 
     - name: Setup Ruby
-      if: steps.check-branch.outputs.should_deploy == 'true'
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ inputs.ruby-version }}
-        bundler-cache: true # runs 'bundle install' and caches gems
+        bundler-cache: true
 
     - name: Install dependencies
-      if: steps.check-branch.outputs.should_deploy == 'true'
       run: npm run setup
 
     - name: Build project
-      if: steps.check-branch.outputs.should_deploy == 'true'
       run: |
-        # Use BUILD_DIRS and BUILD_CONFIGS for builds
-        IFS=',' read -ra DIRS <<< "${BUILD_DIRS}"
-        IFS=';' read -ra CONFIGS_GROUPS <<< "${BUILD_CONFIGS}"
+        IFS=',' read -ra DIRS <<< "${{ needs.pre-check.outputs.build_dirs }}"
+        IFS=';' read -ra CONFIGS_GROUPS <<< "${{ needs.pre-check.outputs.build_configs }}"
         
-        # Validate that we have the same number of directories and config groups
         if [[ ${#DIRS[@]} -ne ${#CONFIGS_GROUPS[@]} ]]; then
-          echo "❌ ERROR: Number of BUILD_DIRS (${#DIRS[@]}) does not match number of BUILD_CONFIGS groups (${#CONFIGS_GROUPS[@]})"
+          echo "❌ ERROR: Mismatch between build directories and configs."
           exit 1
         fi
         
-        echo "🔨 Building ${#DIRS[@]} versions of the project..."
-        
-        # Create a staging directory for all builds
         mkdir -p _build_staging
         
-        # Build each version
         for i in "${!DIRS[@]}"; do
           DIR_NAME="${DIRS[$i]}"
           CONFIG_GROUP="${CONFIGS_GROUPS[$i]// /}"
+          BUILD_DIR="/${DIR_NAME#*/}"
           
-          echo "📦 Building version $((i+1))/${#DIRS[@]}: ${DIR_NAME} with configs ${CONFIG_GROUP}"
-          
-          # Ensure directory name starts with a slash
-          if [[ "${DIR_NAME}" != /* ]]; then
-            BUILD_DIR="/${DIR_NAME}"
-          else
-            BUILD_DIR="${DIR_NAME}"
-          fi
-          
-          # Prepare config string - combine DEPLOY_CONFIGS with CONFIG_GROUP
-          if [[ -n "${DEPLOY_CONFIGS}" && -n "${CONFIG_GROUP}" ]]; then
-            FULL_CONFIGS="${DEPLOY_CONFIGS},_configs/${CONFIG_GROUP}"
+          if [[ -n "${{ needs.pre-check.outputs.deploy_configs }}" && -n "${CONFIG_GROUP}" ]]; then
+            FULL_CONFIGS="${{ needs.pre-check.outputs.deploy_configs }},_configs/${CONFIG_GROUP}"
           elif [[ -n "${CONFIG_GROUP}" ]]; then
             FULL_CONFIGS="_configs/${CONFIG_GROUP}"
           else
-            FULL_CONFIGS="${DEPLOY_CONFIGS}"
+            FULL_CONFIGS="${{ needs.pre-check.outputs.deploy_configs }}"
           fi
           
-          # Build this version with the corresponding configs
           npm run eb -- output --baseurl="${BUILD_DIR}" --configs="${FULL_CONFIGS}" --dontserve=true --deploy=true
           
-          # Copy the built files to staging directory to preserve them
-          # The built files are already in the correct subdirectory structure in _site
-          echo "📁 Copying build to staging: ${BUILD_DIR}"
           mkdir -p "_build_staging${BUILD_DIR}"
           cp -r _site${BUILD_DIR}/* "_build_staging${BUILD_DIR}/"
-          
-          echo "✅ Completed build for ${DIR_NAME}"
         done
-        
-        echo "🎉 All builds completed successfully!"
 
     - name: Clone target repository and determine target branch
-      if: steps.check-branch.outputs.should_deploy == 'true'
       env:
         ORG_DEPLOY_TOKEN: ${{ secrets.ORG_DEPLOY_TOKEN }}
       run: |
-        # Check if token is available
-        if [ -z "$ORG_DEPLOY_TOKEN" ]; then
-          echo "❌ ERROR: ORG_DEPLOY_TOKEN secret is not set or is empty"
-          echo "Please add a ORG_DEPLOY_TOKEN secret to the organisation"
-          exit 1
-        fi
-        
-        echo "✅ ORG_DEPLOY_TOKEN is available"
-        
-        # Clone with token authentication
-        git clone "https://${ORG_DEPLOY_TOKEN}@github.com/${DEPLOY_REPO}.git" target-repo
+        git clone "https://${ORG_DEPLOY_TOKEN}@github.com/${{ needs.pre-check.outputs.deploy_repo }}.git" target-repo
         cd target-repo
         
         SOURCE_BRANCH="${{ github.ref_name }}"
         TARGET_BRANCH="${SOURCE_BRANCH}"
         
-        # Check if the source branch exists in target repo
         if git show-ref --verify --quiet refs/remotes/origin/${SOURCE_BRANCH}; then
-          echo "Using exact branch match: ${SOURCE_BRANCH}"
           git checkout ${SOURCE_BRANCH}
         else
-          # Handle master <-> main mapping
           if [[ "${SOURCE_BRANCH}" == "master" ]] && git show-ref --verify --quiet refs/remotes/origin/main; then
-            echo "Source is master, but target repo has main. Using main branch."
             TARGET_BRANCH="main"
             git checkout main
           elif [[ "${SOURCE_BRANCH}" == "main" ]] && git show-ref --verify --quiet refs/remotes/origin/master; then
-            echo "Source is main, but target repo has master. Using master branch."
             TARGET_BRANCH="master"
             git checkout master
           else
-            echo "Creating new branch: ${SOURCE_BRANCH}"
             git checkout -b ${SOURCE_BRANCH}
           fi
         fi
         
-        # Save the target branch name for later steps
         echo "TARGET_BRANCH=${TARGET_BRANCH}" >> $GITHUB_ENV
 
     - name: Deploy to target repository
-      if: steps.check-branch.outputs.should_deploy == 'true'
       env:
         ORG_DEPLOY_TOKEN: ${{ secrets.ORG_DEPLOY_TOKEN }}
       run: |
         cd target-repo
-        
-        # Configure git to use the token for authentication
         git config url."https://${ORG_DEPLOY_TOKEN}@github.com/".insteadOf "https://github.com/"
         
-        # Deploy using BUILD_DIRS
-        IFS=',' read -ra DIRS <<< "${BUILD_DIRS}"
+        IFS=',' read -ra DIRS <<< "${{ needs.pre-check.outputs.build_dirs }}"
         
-        echo "📂 Deploying ${#DIRS[@]} directories..."
-        
-        # Deploy each directory
         for DIR_NAME in "${DIRS[@]}"; do
-          # Ensure directory name starts with a slash
-          if [[ "${DIR_NAME}" != /* ]]; then
-            DEPLOY_DIR="/${DIR_NAME}"
-          else
-            DEPLOY_DIR="${DIR_NAME}"
-          fi
-          
-          echo "📂 Deploying to directory: ${DEPLOY_DIR}"
-          
-          # Remove existing folder if it exists
+          DEPLOY_DIR="/${DIR_NAME#*/}"
           rm -rf public${DEPLOY_DIR}
-          
-          # Create the full directory structure for nested paths
           mkdir -p public${DEPLOY_DIR}
-          
-          # Copy the built site from staging directory
           cp -r ../_build_staging${DEPLOY_DIR}/* public${DEPLOY_DIR}/
-          
-          # Remove any .gitignore files from the copied content that might prevent tracking
           find public${DEPLOY_DIR} -name ".gitignore" -delete
-          
-          echo "✅ Deployed ${DEPLOY_DIR}"
         done
         
-        echo "🎉 All deployments completed!"
-        
-        # Configure git
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
-        
-        # Add changes and commit (force add to override any gitignore rules)
         git add . --force
         
-        # Check if there are any changes to commit
         if git diff --staged --quiet; then
           echo "No changes to deploy"
           exit 0
@@ -316,75 +219,67 @@ jobs:
         git push origin ${TARGET_BRANCH}
 
     - name: Deployment Summary
-      if: steps.check-branch.outputs.should_deploy == 'true'
       run: |
-        echo "✅ Successfully deployed to ${DEPLOY_REPO}"
+        echo "✅ Successfully deployed to ${{ needs.pre-check.outputs.deploy_repo }}"
         echo "📁 Source branch: ${{ github.ref_name }}"
         echo "📁 Target branch: ${TARGET_BRANCH}"
-        echo "📂 Deployed directories: ${BUILD_DIRS}"
-        echo "🔧 Build configs used: ${BUILD_CONFIGS}"
+        echo "📂 Deployed directories: ${{ needs.pre-check.outputs.build_dirs }}"
+        echo "🔧 Build configs used: ${{ needs.pre-check.outputs.build_configs }}"
         echo "🔗 Called from: ${{ github.repository }}"
 
-  sync-media-to-s3:
+  pre-check-media:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write  # Allows the workflow to get an OIDC token
-      contents: read   # Needed for checkout
+    outputs:
+      should_sync: ${{ steps.check_media.outputs.should_sync }}
+      region: ${{ steps.check_media.outputs.region }}
+      config: ${{ steps.check_media.outputs.config }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Read deploy config
-        id: config
+      - name: Check for media sync
+        id: check_media
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
           
-          # Check if media configuration exists
-          MEDIA_EXISTS=$(cat $CONFIG_FILE | jq -r 'has("media")')
-          if [[ "${MEDIA_EXISTS}" != "true" ]]; then
-            echo "📁 No media configuration found in ${CONFIG_FILE}"
-            echo "Skipping media sync."
-            echo "skip_media=true" >> $GITHUB_OUTPUT
+          if [ ! -f "$CONFIG_FILE" ] || ! jq -e 'has("media")' "$CONFIG_FILE" > /dev/null || [[ $(jq -r '.media.syncs | length' "$CONFIG_FILE") -eq 0 ]]; then
+            echo "No media sync configuration found. Skipping."
+            echo "should_sync=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # Check if there are any sync entries
-          SYNC_COUNT=$(cat $CONFIG_FILE | jq -r '.media.syncs | length')
-          if [[ "${SYNC_COUNT}" -eq 0 ]]; then
-            echo "📁 No media syncs configured in ${CONFIG_FILE}"
-            echo "Skipping media sync."
-            echo "skip_media=true" >> $GITHUB_OUTPUT
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          if [ "$CURRENT_BRANCH" != "live" ] && [ "$CURRENT_BRANCH" != "staging" ]; then
+            echo "Branch '$CURRENT_BRANCH' is not 'live' or 'staging'. Skipping S3 sync."
+            echo "should_sync=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          echo "config=$(cat $CONFIG_FILE | jq -c .)" >> $GITHUB_OUTPUT
-          echo "region=$(cat $CONFIG_FILE | jq -r '.media.region')" >> $GITHUB_OUTPUT
-          echo "skip_media=false" >> $GITHUB_OUTPUT
-          
-          echo "✅ Media configuration validated:"
-          echo "  Sync count: ${SYNC_COUNT}"
+          echo "should_sync=true" >> $GITHUB_OUTPUT
+          echo "region=$(jq -r '.media.region' "$CONFIG_FILE")" >> $GITHUB_OUTPUT
+          echo "config=$(jq -c . "$CONFIG_FILE")" >> $GITHUB_OUTPUT
+
+  sync-media-to-s3:
+    needs: pre-check-media
+    if: needs.pre-check-media.outputs.should_sync == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        if: steps.config.outputs.skip_media != 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::381492306053:role/GitHubActionsS3Access
-          aws-region: ${{ steps.config.outputs.region }}
+          aws-region: ${{ needs.pre-check-media.outputs.region }}
 
       - name: Sync media to S3
-        if: steps.config.outputs.skip_media != 'true'
         run: |
-          # Check if current branch is live or staging (only these trigger media syncs)
           CURRENT_BRANCH="${{ github.ref_name }}"
-          
-          if [ "$CURRENT_BRANCH" != "live" ] && [ "$CURRENT_BRANCH" != "staging" ]; then
-            echo "Branch '$CURRENT_BRANCH' is not 'live' or 'staging'. Skipping S3 sync."
-            exit 0
-          fi
-          
-          # Parse media configuration and sync each entry
-          echo '${{ steps.config.outputs.config }}' | jq -r '.media.syncs[] | [.bucket, .source, .destination, .options] | @tsv' | while IFS=$'\t' read -r bucket source dest options; do
-            # Add suffix to bucket name based on branch
+          echo '${{ needs.pre-check-media.outputs.config }}' | jq -r '.media.syncs[] | [.bucket, .source, .destination, .options] | @tsv' | while IFS=$'\t' read -r bucket source dest options; do
             if [ "$CURRENT_BRANCH" = "live" ]; then
               bucket="${bucket}-live"
             else
