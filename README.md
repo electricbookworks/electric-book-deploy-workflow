@@ -38,7 +38,7 @@ jobs:
     with:
       config-file: '.github/workflows/deploy.config.json' # optional - defaults to '.github/workflows/deploy.config.json'
       node-version: '22' # optional - defaults to 22
-      ruby-version: '3.1' # optional - defaults to 3.1
+      ruby-version: '3.2' # optional - defaults to 3.2
     secrets: inherit
 ```
 
