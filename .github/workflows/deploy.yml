@@ -54,7 +54,7 @@ jobs:
           
           # Extract build configurations
           BUILD_DIRS=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | map(.dir) | join(",")')
-          BUILD_CONFIGS=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | map(.configs | join(",")) | join(";")')
+          BUILD_CONFIGS=$(cat "$CONFIG_FILE" | jq -r '.["book-server"].builds | map(.configs | if length > 0 then join(",") else " " end) | join(";")')
           
           # Export to GitHub environment
           echo "DEPLOY_BRANCHES=${DEPLOY_BRANCHES}" >> $GITHUB_ENV
@@ -178,7 +178,7 @@ jobs:
         # Build each version
         for i in "${!DIRS[@]}"; do
           DIR_NAME="${DIRS[$i]}"
-          CONFIG_GROUP="${CONFIGS_GROUPS[$i]}"
+          CONFIG_GROUP="${CONFIGS_GROUPS[$i]// /}"
           
           echo "📦 Building version $((i+1))/${#DIRS[@]}: ${DIR_NAME} with configs ${CONFIG_GROUP}"
           
