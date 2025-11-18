@@ -289,7 +289,12 @@ jobs:
             else
               bucket="${bucket}-staging"
             fi
+            
             echo "Syncing $source to s3://$bucket/$dest/ with options: $options"
-            # Use eval to correctly handle the options string with its quotes
-            eval "aws s3 sync '$source/' 's3://$bucket/$dest/' $options"
+            
+            # Read the options string into an array to handle arguments with spaces correctly.
+            read -r -a options_array <<< "$options"
+            
+            # Sync to S3, expanding the options array
+            aws s3 sync "$source/" "s3://$bucket/$dest/" "${options_array[@]}"
           done
