@@ -175,7 +175,15 @@ jobs:
         
         S3_BUCKET="${BUCKET}${BUCKET_SUFFIX}"
         
-        aws s3 sync "_build_staging/" "s3://${S3_BUCKET}/" --delete
+        IFS=',' read -ra DIRS <<< "${{ needs.pre-check.outputs.build_dirs }}"
+        
+        # Get the unique root directories
+        ROOT_DIRS=$(for dir in "${DIRS[@]}"; do echo "${dir%%/*}"; done | sort -u)
+        
+        for ROOT_DIR in $ROOT_DIRS; do
+          echo "Syncing directory '$ROOT_DIR' to s3://${S3_BUCKET}/${ROOT_DIR}/"
+          aws s3 sync "_build_staging/${ROOT_DIR}/" "s3://${S3_BUCKET}/${ROOT_DIR}/" --delete
+        done
         
         echo "S3_BUCKET=${S3_BUCKET}" >> $GITHUB_ENV
 
