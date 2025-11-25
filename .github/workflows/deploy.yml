@@ -30,8 +30,7 @@ jobs:
       skip_book_server: ${{ steps.check_config.outputs.skip_book_server }}
       should_build: ${{ steps.check_builds.outputs.should_build }}
       should_deploy: ${{ steps.check_branch.outputs.should_deploy }}
-      deploy_repo: ${{ steps.load_config.outputs.deploy_repo }}
-      deploy_branches: ${{ steps.load_config.outputs.deploy_branches }}
+      deploy_bucket: ${{ steps.load_config.outputs.deploy_bucket }}
       deploy_configs: ${{ steps.load_config.outputs.deploy_configs }}
       build_dirs: ${{ steps.load_config.outputs.build_dirs }}
       build_configs: ${{ steps.load_config.outputs.build_configs }}
@@ -60,14 +59,12 @@ jobs:
           exit 0
         fi
         
-        DEPLOY_REPO=$(jq -r '.["book-server"].repo' "$CONFIG_FILE")
-        DEPLOY_BRANCHES=$(jq -r '.["book-server"].branches | join(",")' "$CONFIG_FILE")
+        DEPLOY_BUCKET=$(jq -r '.["book-server"].bucket' "$CONFIG_FILE")
         DEPLOY_CONFIGS=$(jq -r '.["book-server"].configs | join(",")' "$CONFIG_FILE")
         BUILD_DIRS=$(jq -r '.["book-server"].builds | map(.dir) | join(",")' "$CONFIG_FILE")
         BUILD_CONFIGS=$(jq -r '.["book-server"].builds | map(.configs | if length > 0 then join(",") else " " end) | join(";")' "$CONFIG_FILE")
         
-        echo "deploy_repo=${DEPLOY_REPO}" >> $GITHUB_OUTPUT
-        echo "deploy_branches=${DEPLOY_BRANCHES}" >> $GITHUB_OUTPUT
+        echo "deploy_bucket=${DEPLOY_BUCKET}" >> $GITHUB_OUTPUT
         echo "deploy_configs=${DEPLOY_CONFIGS}" >> $GITHUB_OUTPUT
         echo "build_dirs=${BUILD_DIRS}" >> $GITHUB_OUTPUT
         echo "build_configs=${BUILD_CONFIGS}" >> $GITHUB_OUTPUT
@@ -90,27 +87,22 @@ jobs:
       if: steps.check_builds.outputs.should_build == 'true'
       run: |
         CURRENT_BRANCH="${{ github.ref_name }}"
-        IFS=',' read -ra ALLOWED <<< "${{ steps.load_config.outputs.deploy_branches }}"
-        BRANCH_ALLOWED=false
-        for branch in "${ALLOWED[@]}"; do
-          if [[ "${CURRENT_BRANCH}" == "${branch// /}" ]]; then
-            BRANCH_ALLOWED=true
-            break
-          fi
-        done
-        
-        if [[ "${BRANCH_ALLOWED}" == "false" ]]; then
-          echo "❌ Branch '${CURRENT_BRANCH}' is not allowed, skipping deployment."
+        if [ "$CURRENT_BRANCH" != "live" ] && [ "$CURRENT_BRANCH" != "staging" ]; then
+          echo "❌ Branch '${CURRENT_BRANCH}' is not 'live' or 'staging', skipping deployment."
           echo "should_deploy=false" >> $GITHUB_OUTPUT
         else
           echo "✅ Branch '${CURRENT_BRANCH}' is allowed for deployment."
           echo "should_deploy=true" >> $GITHUB_OUTPUT
+          echo "target_branch=${CURRENT_BRANCH}" >> $GITHUB_OUTPUT
         fi
 
   deploy-to-book-server:
     needs: pre-check
     if: needs.pre-check.outputs.should_deploy == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     
     steps:
     - name: Checkout source repository
@@ -164,66 +156,33 @@ jobs:
           cp -r _site${BUILD_DIR}/* "_build_staging${BUILD_DIR}/"
         done
 
-    - name: Clone target repository and determine target branch
-      env:
-        ORG_DEPLOY_TOKEN: ${{ secrets.ORG_DEPLOY_TOKEN }}
-      run: |
-        git clone "https://${ORG_DEPLOY_TOKEN}@github.com/${{ needs.pre-check.outputs.deploy_repo }}.git" target-repo
-        cd target-repo
-        
-        SOURCE_BRANCH="${{ github.ref_name }}"
-        TARGET_BRANCH="${SOURCE_BRANCH}"
-        
-        if git show-ref --verify --quiet refs/remotes/origin/${SOURCE_BRANCH}; then
-          git checkout ${SOURCE_BRANCH}
-        else
-          if [[ "${SOURCE_BRANCH}" == "master" ]] && git show-ref --verify --quiet refs/remotes/origin/main; then
-            TARGET_BRANCH="main"
-            git checkout main
-          elif [[ "${SOURCE_BRANCH}" == "main" ]] && git show-ref --verify --quiet refs/remotes/origin/master; then
-            TARGET_BRANCH="master"
-            git checkout master
-          else
-            git checkout -b ${SOURCE_BRANCH}
-          fi
-        fi
-        
-        echo "TARGET_BRANCH=${TARGET_BRANCH}" >> $GITHUB_ENV
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::381492306053:role/GitHubActionsS3Access
+        aws-region: eu-west-2
 
-    - name: Deploy to target repository
-      env:
-        ORG_DEPLOY_TOKEN: ${{ secrets.ORG_DEPLOY_TOKEN }}
+    - name: Deploy to S3
       run: |
-        cd target-repo
-        git config url."https://${ORG_DEPLOY_TOKEN}@github.com/".insteadOf "https://github.com/"
+        TARGET_BRANCH="${{ needs.pre-check.outputs.target_branch }}"
+        BUCKET="${{ needs.pre-check.outputs.deploy_bucket }}"
         
-        IFS=',' read -ra DIRS <<< "${{ needs.pre-check.outputs.build_dirs }}"
-        
-        for DIR_NAME in "${DIRS[@]}"; do
-          DEPLOY_DIR="/${DIR_NAME#*/}"
-          rm -rf public${DEPLOY_DIR}
-          mkdir -p public${DEPLOY_DIR}
-          cp -r ../_build_staging${DEPLOY_DIR}/* public${DEPLOY_DIR}/
-          find public${DEPLOY_DIR} -name ".gitignore" -delete
-        done
-        
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        git add . --force
-        
-        if git diff --staged --quiet; then
-          echo "No changes to deploy"
-          exit 0
+        if [ "$TARGET_BRANCH" = "live" ]; then
+          BUCKET_SUFFIX="-live"
+        else
+          BUCKET_SUFFIX="-staging"
         fi
         
-        git commit -m "Deploy '${{ github.event.head_commit.message }}' from ${{ github.repository }}"
-        git push origin ${TARGET_BRANCH}
+        S3_BUCKET="${BUCKET}${BUCKET_SUFFIX}"
+        
+        aws s3 sync "_build_staging/" "s3://${S3_BUCKET}/" --delete
+        
+        echo "S3_BUCKET=${S3_BUCKET}" >> $GITHUB_ENV
 
     - name: Deployment Summary
       run: |
-        echo "✅ Successfully deployed to ${{ needs.pre-check.outputs.deploy_repo }}"
+        echo "✅ Successfully deployed to ${S3_BUCKET}"
         echo "📁 Source branch: ${{ github.ref_name }}"
-        echo "📁 Target branch: ${TARGET_BRANCH}"
         echo "📂 Deployed directories: ${{ needs.pre-check.outputs.build_dirs }}"
         echo "🔧 Build configs used: ${{ needs.pre-check.outputs.build_configs }}"
         echo "🔗 Called from: ${{ github.repository }}"
