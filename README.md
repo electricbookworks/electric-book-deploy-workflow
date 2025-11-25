@@ -49,14 +49,15 @@ Create `.github/workflows/deploy.config.json`:
 ```json
 {
   "book-server": {
-    "repo": "electricbookworks/electric-book-server-template",
-    "branches": [
-      "staging",
-      "live"
-    ],
+    "bucket-comment": "The bucket name is suffixed with -live or -staging depending on the branch.",
+    "bucket": "ebt-books",
     "configs-comment": "All configs are relative to the _configs folder.",
     "configs": ["_config.live.yml"],
     "builds": [
+      {
+        "configs": [],
+        "dir": "electric-book"
+      },
       {
         "configs": ["_config.student.yml"],
         "dir": "audience/student"
@@ -79,6 +80,12 @@ Create `.github/workflows/deploy.config.json`:
         "options": ""
       }
     ]
+  },
+  "vercel": {
+    "trigger": {
+      "live": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/LbOKWUxQpc",
+      "staging": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/gKusn6nGUb"
+    }
   }
 }
 ```
@@ -86,7 +93,8 @@ Create `.github/workflows/deploy.config.json`:
 In `deploy.config.json` configure the following:
 
 1. The book server repo. This is an [Electric Book Server](https://github.com/electricbookworks/electric-book-server-template) instance (e.g. `core-book-server`) that serves projects from its `public` folder and is configured for its own continuous deployment. 
-2. The branches that will trigger deployments on new commits. The workflow will push to the same branch on the deployment repo, matching `main` to `master` and vica versa.
+2. The S3 bucket to sync the built files to.
 3. Deployment configs to be used on all builds.
 4. The separate builds that need to be deployed. Each build has a deployment directory that will be pushed to the deployment repo's `public` directory. If the directory already exists, it will be replaced entirely by the new deployment. You can also configure build-specific configs for each.
 5. Media sync commands with S3.
+6. The Vercel deploy triggers. These are specific to the project and branch of the book server your project deploys to.
