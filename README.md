@@ -83,8 +83,8 @@ Create `.github/workflows/deploy.config.json`:
   },
   "vercel": {
     "trigger": {
-      "live": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/LbOKWUxQpc",
-      "staging": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/gKusn6nGUb"
+      "live": "https://api.vercel.com/v1/integrations/deploy/{IDs}",
+      "staging": "https://api.vercel.com/v1/integrations/deploy/{IDs}"
     }
   }
 }
