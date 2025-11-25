@@ -1,13 +1,14 @@
 {
   "book-server": {
-    "repo": "electricbookworks/electric-book-server-template",
-    "branches": [
-      "staging",
-      "live"
-    ],
+    "bucket-comment": "The bucket name is suffixed with -live or -staging depending on the branch.",
+    "bucket": "ebt-books",
     "configs-comment": "All configs are relative to the _configs folder.",
     "configs": ["_config.live.yml"],
     "builds": [
+      {
+        "configs": [],
+        "dir": "electric-book"
+      },
       {
         "configs": ["_config.student.yml"],
         "dir": "audience/student"
@@ -30,5 +31,11 @@
         "options": ""
       }
     ]
+  },
+  "vercel": {
+    "trigger": {
+      "live": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/LbOKWUxQpc",
+      "staging": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/gKusn6nGUb"
+    }
   }
 }
