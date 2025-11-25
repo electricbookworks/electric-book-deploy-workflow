@@ -257,3 +257,51 @@ jobs:
             # Sync to S3, expanding the options array
             aws s3 sync "$source/" "s3://$bucket/$dest/" "${options_array[@]}"
           done
+
+  pre-check-vercel:
+    runs-on: ubuntu-latest
+    outputs:
+      should_trigger: ${{ steps.check_vercel.outputs.should_trigger }}
+      trigger_url: ${{ steps.check_vercel.outputs.trigger_url }}
+    steps:
+      - name: Checkout config file
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: ${{ inputs.config-file }}
+          fetch-depth: 1
+
+      - name: Check for vercel trigger
+        id: check_vercel
+        run: |
+          CONFIG_FILE="${{ inputs.config-file }}"
+          
+          if [ ! -f "$CONFIG_FILE" ] || ! jq -e 'has("vercel")' "$CONFIG_FILE" > /dev/null || ! jq -e '.vercel | has("trigger")' "$CONFIG_FILE" > /dev/null; then
+            echo "No vercel trigger configuration found. Skipping."
+            echo "should_trigger=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          if [ "$CURRENT_BRANCH" != "live" ] && [ "$CURRENT_BRANCH" != "staging" ]; then
+            echo "Branch '$CURRENT_BRANCH' is not 'live' or 'staging'. Skipping Vercel trigger."
+            echo "should_trigger=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          TRIGGER_URL=$(jq -r ".vercel.trigger.${CURRENT_BRANCH}" "$CONFIG_FILE")
+          if [ -z "$TRIGGER_URL" ] || [ "$TRIGGER_URL" == "null" ]; then
+            echo "No Vercel trigger URL found for branch '$CURRENT_BRANCH'. Skipping."
+            echo "should_trigger=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "should_trigger=true" >> $GITHUB_OUTPUT
+          echo "trigger_url=${TRIGGER_URL}" >> $GITHUB_OUTPUT
+
+  trigger-vercel-deploy:
+    needs: [deploy-to-book-server, sync-media-to-s3, pre-check-vercel]
+    if: always() && needs.pre-check-vercel.outputs.should_trigger == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Deploy
+        run: curl -X POST "${{ needs.pre-check-vercel.outputs.trigger_url }}"
