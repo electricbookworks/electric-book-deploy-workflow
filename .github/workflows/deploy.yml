@@ -150,10 +150,10 @@ jobs:
             FULL_CONFIGS="${{ needs.pre-check.outputs.deploy_configs }}"
           fi
           
-          npm run eb -- output --baseurl="${BUILD_DIR}" --configs="${FULL_CONFIGS}" --dontserve=true --deploy=true
+          npm run eb -- output --baseurl="/${DIR_NAME}" --configs="${FULL_CONFIGS}" --dontserve=true --deploy=true
           
-          mkdir -p "_build_staging${BUILD_DIR}"
-          cp -r _site${BUILD_DIR}/* "_build_staging${BUILD_DIR}/"
+          mkdir -p "_build_staging/${DIR_NAME}"
+          cp -r "_site/${DIR_NAME}"/* "_build_staging/${DIR_NAME}/"
         done
 
     - name: Configure AWS credentials
