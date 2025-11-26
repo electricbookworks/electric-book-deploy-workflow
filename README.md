@@ -69,7 +69,6 @@ Create `.github/workflows/deploy.config.json`:
     ]
   },
   "media" : {
-    "branches-comment": "Only live and staging branches will trigger these syncs. This is not configurable.",
     "region": "eu-west-2",
     "syncs": [
       {
