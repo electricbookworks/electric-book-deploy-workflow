@@ -20,7 +20,6 @@
     ]
   },
   "media" : {
-    "branches-comment": "Only live and staging branches will trigger these syncs. This is not configurable.",
     "region": "eu-west-2",
     "syncs": [
       {
@@ -34,8 +33,8 @@
   },
   "vercel": {
     "trigger": {
-      "live": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/LbOKWUxQpc",
-      "staging": "https://api.vercel.com/v1/integrations/deploy/prj_3JQKhLSRlptDAqiKPWyuKMGhbaGG/gKusn6nGUb"
+      "live": "https://api.vercel.com/v1/integrations/deploy/{IDs}",
+      "staging": "https://api.vercel.com/v1/integrations/deploy/{IDs}"
     }
   }
 }
