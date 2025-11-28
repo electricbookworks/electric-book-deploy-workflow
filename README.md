@@ -69,7 +69,6 @@ Create `.github/workflows/deploy.config.json`:
     ]
   },
   "media" : {
-    "branches-comment": "Only live and staging branches will trigger these syncs. This is not configurable.",
     "region": "eu-west-2",
     "syncs": [
       {
@@ -92,9 +91,8 @@ Create `.github/workflows/deploy.config.json`:
 
 In `deploy.config.json` configure the following:
 
-1. The book server repo. This is an [Electric Book Server](https://github.com/electricbookworks/electric-book-server-template) instance (e.g. `core-book-server`) that serves projects from its `public` folder and is configured for its own continuous deployment. 
-2. The S3 bucket to sync the built files to.
-3. Deployment configs to be used on all builds.
-4. The separate builds that need to be deployed. Each build has a deployment directory that will be pushed to the deployment repo's `public` directory. If the directory already exists, it will be replaced entirely by the new deployment. You can also configure build-specific configs for each.
-5. Media sync commands with S3.
-6. The Vercel deploy triggers. These are specific to the project and branch of the book server your project deploys to.
+1. The S3 bucket to sync the built files to.
+2. Deployment configs to be used on all builds.
+3. The separate builds that need to be deployed. Each build has a deployment directory that will be uploaded to the S3 bucket. If the directory already exists, it will be replaced entirely by the new deployment. You can also configure build-specific configs for each.
+4. Media sync commands with S3.
+5. The Vercel deploy triggers. These are specific to the project and branch of the book server your project deploys to.
