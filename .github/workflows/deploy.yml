@@ -267,6 +267,8 @@ jobs:
           done
 
   pre-check-vercel:
+    needs: [deploy-to-book-server]
+    if: always()
     runs-on: ubuntu-latest
     outputs:
       should_trigger: ${{ steps.check_vercel.outputs.should_trigger }}
@@ -282,6 +284,14 @@ jobs:
         id: check_vercel
         run: |
           CONFIG_FILE="${{ inputs.config-file }}"
+          
+          # Check if deploy-to-book-server ran and completed successfully
+          DEPLOY_JOB_RESULT="${{ needs.deploy-to-book-server.result }}"
+          if [ "$DEPLOY_JOB_RESULT" != "success" ]; then
+            echo "deploy-to-book-server job did not complete successfully (result: $DEPLOY_JOB_RESULT). Skipping Vercel trigger."
+            echo "should_trigger=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           
           if [ ! -f "$CONFIG_FILE" ] || ! jq -e 'has("vercel")' "$CONFIG_FILE" > /dev/null || ! jq -e '.vercel | has("trigger")' "$CONFIG_FILE" > /dev/null; then
             echo "No vercel trigger configuration found. Skipping."
