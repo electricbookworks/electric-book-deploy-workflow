@@ -71,7 +71,7 @@ Create `.github/workflows/deploy.config.json`:
     "syncs": [
       {
         "bucket-comment": "The bucket name is suffixed with -live or -staging depending on the branch.",
-        "bucket": "electric-book",
+        "bucket": "ebt-media",
         "source": "assets/images/web",
         "destination": "assets/images/web",
         "options": ""
