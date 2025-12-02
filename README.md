@@ -18,10 +18,9 @@ on:
 jobs:
   deploy:
     uses: electricbookworks/electric-book-deploy-workflow/.github/workflows/deploy.yml@{release-version}
-    secrets: inherit
 ```
 
-Replace `{release-version}` with the latest release (e.g. `v1.0.1`), unless you want to use an older version.
+Replace `{release-version}` with the latest release (e.g. `v2.0.2`), unless you want to use an older version.
 
 You can also add optional inputs to customise the Ruby and Node versions, as well as the config file location:
 
@@ -39,7 +38,6 @@ jobs:
       config-file: '.github/workflows/deploy.config.json' # optional - defaults to '.github/workflows/deploy.config.json'
       node-version: '22' # optional - defaults to 22
       ruby-version: '3.2' # optional - defaults to 3.2
-    secrets: inherit
 ```
 
 ### 2. Create your deployment configuration
