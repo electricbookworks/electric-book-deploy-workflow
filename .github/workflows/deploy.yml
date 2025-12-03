@@ -262,6 +262,22 @@ jobs:
             aws s3 sync "$source/" "s3://$bucket/$dest/" "${options_array[@]}"
           done
 
+      - name: Invalidate CloudFront cache
+        run: |
+          CONFIG='${{ needs.pre-check-media.outputs.config }}'
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          if [ "$CURRENT_BRANCH" = "live" ]; then
+            CLOUDFRONT_ID=$(echo "$CONFIG" | jq -r '.media["cloudfront-id-live"]')
+          else
+            CLOUDFRONT_ID=$(echo "$CONFIG" | jq -r '.media["cloudfront-id-staging"]')
+          fi
+          if [ -n "$CLOUDFRONT_ID" ] && [ "$CLOUDFRONT_ID" != "null" ]; then
+            echo "Invalidating CloudFront cache for distribution $CLOUDFRONT_ID"
+            aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_ID" --paths '/*'
+          else
+            echo "No CloudFront distribution ID found for branch $CURRENT_BRANCH. Skipping invalidation."
+          fi
+
   pre-check-vercel:
     needs: [deploy-to-book-server]
     if: always()
