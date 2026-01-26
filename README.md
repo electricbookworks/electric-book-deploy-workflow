@@ -37,7 +37,7 @@ jobs:
     with:
       config-file: '.github/workflows/deploy.config.json' # optional - defaults to '.github/workflows/deploy.config.json'
       node-version: '22' # optional - defaults to 22
-      ruby-version: '3.2' # optional - defaults to 3.2
+      runner: 'Linux-4core-16gb-ram-150gb-sso' # optional - defaults to 'ubuntu-latest'
 ```
 
 ### 2. Create your deployment configuration

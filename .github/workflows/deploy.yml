@@ -18,10 +18,15 @@ on:
         required: false
         default: '3.2'
         type: string
+      runner:
+        description: 'GitHub Actions Runner VM'
+        required: false
+        default: 'ubuntu-latest'
+        type: string
 
 jobs:
   pre-check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       skip_book_server: ${{ steps.check_config.outputs.skip_book_server }}
       should_build: ${{ steps.check_builds.outputs.should_build }}
@@ -95,7 +100,7 @@ jobs:
   deploy-to-book-server:
     needs: pre-check
     if: needs.pre-check.outputs.should_deploy == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       id-token: write
       contents: read
@@ -192,7 +197,7 @@ jobs:
         echo "🔗 Called from: ${{ github.repository }}"
 
   pre-check-media:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       should_sync: ${{ steps.check_media.outputs.should_sync }}
       region: ${{ steps.check_media.outputs.region }}
@@ -229,7 +234,7 @@ jobs:
   sync-media-to-s3:
     needs: pre-check-media
     if: needs.pre-check-media.outputs.should_sync == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     permissions:
       id-token: write
       contents: read
@@ -281,7 +286,7 @@ jobs:
   pre-check-vercel:
     needs: [deploy-to-book-server]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       should_trigger: ${{ steps.check_vercel.outputs.should_trigger }}
       trigger_url: ${{ steps.check_vercel.outputs.trigger_url }}
@@ -331,7 +336,7 @@ jobs:
   trigger-vercel-deploy:
     needs: [deploy-to-book-server, sync-media-to-s3, pre-check-vercel]
     if: always() && needs.pre-check-vercel.outputs.should_trigger == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     steps:
       - name: Trigger Vercel Deploy
         run: curl -X POST "${{ needs.pre-check-vercel.outputs.trigger_url }}"
