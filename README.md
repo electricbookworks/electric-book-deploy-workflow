@@ -18,6 +18,7 @@ on:
 jobs:
   deploy:
     uses: electricbookworks/electric-book-deploy-workflow/.github/workflows/deploy.yml@{release-version}
+    secrets: inherit
 ```
 
 Replace `{release-version}` with the latest release (e.g. `v2.0.2`), unless you want to use an older version.
@@ -34,6 +35,7 @@ on:
 jobs:
   deploy:
     uses: electricbookworks/electric-book-deploy-workflow/.github/workflows/deploy.yml@{release-version}
+    secrets: inherit
     with:
       config-file: '.github/workflows/deploy.config.json' # optional - defaults to '.github/workflows/deploy.config.json'
       node-version: '22' # optional - defaults to 22
