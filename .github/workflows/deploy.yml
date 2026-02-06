@@ -23,9 +23,34 @@ on:
         required: false
         default: 'ubuntu-latest'
         type: string
+      repo-owner:
+        description: 'Repository owner/organization allowed to run this workflow'
+        required: false
+        default: 'electricbookworks'
+        type: string
 
 jobs:
+  owner-check:
+    runs-on: ${{ inputs.runner }}
+    outputs:
+      is_allowed_owner: ${{ steps.check_owner.outputs.is_allowed_owner }}
+    steps:
+      - name: Check repository owner
+        id: check_owner
+        run: |
+          REPO_OWNER="${{ github.repository_owner }}"
+          ALLOWED_OWNER="${{ inputs.repo-owner }}"
+          if [ "$REPO_OWNER" != "$ALLOWED_OWNER" ]; then
+            echo "⚠️  Repository owner '$REPO_OWNER' is not '$ALLOWED_OWNER'. Skipping workflow execution."
+            echo "is_allowed_owner=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Repository owner '$REPO_OWNER' is authorized. Proceeding with workflow."
+            echo "is_allowed_owner=true" >> $GITHUB_OUTPUT
+          fi
+
   pre-check:
+    needs: owner-check
+    if: needs.owner-check.outputs.is_allowed_owner == 'true'
     runs-on: ${{ inputs.runner }}
     outputs:
       skip_book_server: ${{ steps.check_config.outputs.skip_book_server }}

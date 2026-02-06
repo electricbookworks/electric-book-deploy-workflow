@@ -23,7 +23,7 @@ jobs:
 
 Replace `{release-version}` with the latest release (e.g. `v2.0.2`), unless you want to use an older version.
 
-You can also add optional inputs to customise the Ruby and Node versions, as well as the config file location:
+You can also provide the following optional inputs, under the `with` property:
 
 ```yaml
 name: Deploy to Electric Book Server and S3
@@ -40,6 +40,7 @@ jobs:
       config-file: '.github/workflows/deploy.config.json' # optional - defaults to '.github/workflows/deploy.config.json'
       node-version: '22' # optional - defaults to 22
       runner: 'Linux-4core-16gb-ram-150gb-sso' # optional - defaults to 'ubuntu-latest'
+      repo-owner: 'electricbookworks' # optional - defaults to 'electricbookworks' - if not a match, workflow will be skipped
 ```
 
 ### 2. Create your deployment configuration
