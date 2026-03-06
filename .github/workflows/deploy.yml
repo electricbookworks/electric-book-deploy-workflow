@@ -48,7 +48,7 @@ jobs:
             echo "is_allowed_owner=true" >> $GITHUB_OUTPUT
           fi
 
-  pre-check:
+  pre-check-book-server:
     needs: owner-check
     if: needs.owner-check.outputs.is_allowed_owner == 'true'
     runs-on: ${{ inputs.runner }}
@@ -130,8 +130,8 @@ jobs:
         fi
 
   deploy-to-book-server:
-    needs: pre-check
-    if: needs.pre-check.outputs.should_deploy == 'true'
+    needs: pre-check-book-server
+    if: needs.pre-check-book-server.outputs.should_deploy == 'true'
     runs-on: ${{ inputs.runner }}
     permissions:
       id-token: write
@@ -160,8 +160,8 @@ jobs:
 
     - name: Build project
       run: |
-        IFS=',' read -ra DIRS <<< "${{ needs.pre-check.outputs.build_dirs }}"
-        IFS=';' read -ra CONFIGS_GROUPS <<< "${{ needs.pre-check.outputs.build_configs }}"
+        IFS=',' read -ra DIRS <<< "${{ needs.pre-check-book-server.outputs.build_dirs }}"
+        IFS=';' read -ra CONFIGS_GROUPS <<< "${{ needs.pre-check-book-server.outputs.build_configs }}"
         
         if [[ ${#DIRS[@]} -ne ${#CONFIGS_GROUPS[@]} ]]; then
           echo "❌ ERROR: Mismatch between build directories and configs."
@@ -175,12 +175,12 @@ jobs:
           CONFIG_GROUP="${CONFIGS_GROUPS[$i]// /}"
           BUILD_DIR="/${DIR_NAME#*/}"
           
-          if [[ -n "${{ needs.pre-check.outputs.deploy_configs }}" && -n "${CONFIG_GROUP}" ]]; then
-            FULL_CONFIGS="${{ needs.pre-check.outputs.deploy_configs }},_configs/${CONFIG_GROUP}"
+          if [[ -n "${{ needs.pre-check-book-server.outputs.deploy_configs }}" && -n "${CONFIG_GROUP}" ]]; then
+            FULL_CONFIGS="${{ needs.pre-check-book-server.outputs.deploy_configs }},_configs/${CONFIG_GROUP}"
           elif [[ -n "${CONFIG_GROUP}" ]]; then
             FULL_CONFIGS="_configs/${CONFIG_GROUP}"
           else
-            FULL_CONFIGS="${{ needs.pre-check.outputs.deploy_configs }}"
+            FULL_CONFIGS="${{ needs.pre-check-book-server.outputs.deploy_configs }}"
           fi
           
           npm run eb -- output --baseurl="/${DIR_NAME}" --configs="${FULL_CONFIGS}" --dontserve=true --deploy=true
@@ -192,13 +192,13 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ needs.pre-check.outputs.aws_role_arn }}
-        aws-region: ${{ needs.pre-check.outputs.aws_region }}
+        role-to-assume: ${{ needs.pre-check-book-server.outputs.aws_role_arn }}
+        aws-region: ${{ needs.pre-check-book-server.outputs.aws_region }}
 
     - name: Deploy to S3
       run: |
-        TARGET_BRANCH="${{ needs.pre-check.outputs.target_branch }}"
-        BUCKET="${{ needs.pre-check.outputs.deploy_bucket }}"
+        TARGET_BRANCH="${{ needs.pre-check-book-server.outputs.target_branch }}"
+        BUCKET="${{ needs.pre-check-book-server.outputs.deploy_bucket }}"
         
         if [ "$TARGET_BRANCH" = "live" ]; then
           BUCKET_SUFFIX="-live"
@@ -208,7 +208,7 @@ jobs:
         
         S3_BUCKET="${BUCKET}${BUCKET_SUFFIX}"
         
-        IFS=',' read -ra DIRS <<< "${{ needs.pre-check.outputs.build_dirs }}"
+        IFS=',' read -ra DIRS <<< "${{ needs.pre-check-book-server.outputs.build_dirs }}"
         
         # Get the unique root directories
         ROOT_DIRS=$(for dir in "${DIRS[@]}"; do echo "${dir%%/*}"; done | sort -u)
@@ -224,8 +224,8 @@ jobs:
       run: |
         echo "✅ Successfully deployed to ${S3_BUCKET}"
         echo "📁 Source branch: ${{ github.ref_name }}"
-        echo "📂 Deployed directories: ${{ needs.pre-check.outputs.build_dirs }}"
-        echo "🔧 Build configs used: ${{ needs.pre-check.outputs.build_configs }}"
+        echo "📂 Deployed directories: ${{ needs.pre-check-book-server.outputs.build_dirs }}"
+        echo "🔧 Build configs used: ${{ needs.pre-check-book-server.outputs.build_configs }}"
         echo "🔗 Called from: ${{ github.repository }}"
 
   pre-check-media:
