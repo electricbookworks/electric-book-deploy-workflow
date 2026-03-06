@@ -229,6 +229,8 @@ jobs:
         echo "🔗 Called from: ${{ github.repository }}"
 
   pre-check-media:
+    needs: owner-check
+    if: needs.owner-check.outputs.is_allowed_owner == 'true'
     runs-on: ${{ inputs.runner }}
     outputs:
       should_sync: ${{ steps.check_media.outputs.should_sync }}
