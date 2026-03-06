@@ -1,4 +1,8 @@
 {
+  "aws": {
+    "role-arn": "arn:aws:iam::{account_id}:role/GitHubActionsS3Access",
+    "region": "eu-west-2"
+  },
   "book-server": {
     "bucket-comment": "The bucket name is suffixed with -live or -staging depending on the branch.",
     "bucket": "ebt-books",
@@ -20,7 +24,6 @@
     ]
   },
   "media" : {
-    "region": "eu-west-2",
     "cloudfront-comment": "The CloudFront ID is used to invalidate the cache after deployment.",
     "cloudfront-id-staging": "E7XZICS0M3W1S",
     "cloudfront-id-live": "E2KTTVJ1I6I7D8",

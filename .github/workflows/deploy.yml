@@ -61,6 +61,8 @@ jobs:
       build_dirs: ${{ steps.load_config.outputs.build_dirs }}
       build_configs: ${{ steps.load_config.outputs.build_configs }}
       target_branch: ${{ steps.check_branch.outputs.target_branch }}
+      aws_role_arn: ${{ steps.load_config.outputs.aws_role_arn }}
+      aws_region: ${{ steps.load_config.outputs.aws_region }}
 
     steps:
     - name: Checkout config file
@@ -90,10 +92,15 @@ jobs:
         BUILD_DIRS=$(jq -r '.["book-server"].builds | map(.dir) | join(",")' "$CONFIG_FILE")
         BUILD_CONFIGS=$(jq -r '.["book-server"].builds | map(.configs | if length > 0 then join(",") else " " end) | join(";")' "$CONFIG_FILE")
         
+        AWS_ROLE_ARN=$(jq -r '.aws["role-arn"]' "$CONFIG_FILE")
+        AWS_REGION=$(jq -r '.aws.region' "$CONFIG_FILE")
+        
         echo "deploy_bucket=${DEPLOY_BUCKET}" >> $GITHUB_OUTPUT
         echo "deploy_configs=${DEPLOY_CONFIGS}" >> $GITHUB_OUTPUT
         echo "build_dirs=${BUILD_DIRS}" >> $GITHUB_OUTPUT
         echo "build_configs=${BUILD_CONFIGS}" >> $GITHUB_OUTPUT
+        echo "aws_role_arn=${AWS_ROLE_ARN}" >> $GITHUB_OUTPUT
+        echo "aws_region=${AWS_REGION}" >> $GITHUB_OUTPUT
         echo "skip_book_server=false" >> $GITHUB_OUTPUT
 
     - name: Check for builds
@@ -185,8 +192,8 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::381492306053:role/GitHubActionsS3Access
-        aws-region: eu-west-2
+        role-to-assume: ${{ needs.pre-check.outputs.aws_role_arn }}
+        aws-region: ${{ needs.pre-check.outputs.aws_region }}
 
     - name: Deploy to S3
       run: |
@@ -225,6 +232,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     outputs:
       should_sync: ${{ steps.check_media.outputs.should_sync }}
+      role_arn: ${{ steps.check_media.outputs.role_arn }}
       region: ${{ steps.check_media.outputs.region }}
       config: ${{ steps.check_media.outputs.config }}
     steps:
@@ -253,7 +261,8 @@ jobs:
           fi
           
           echo "should_sync=true" >> $GITHUB_OUTPUT
-          echo "region=$(jq -r '.media.region' "$CONFIG_FILE")" >> $GITHUB_OUTPUT
+          echo "role_arn=$(jq -r '.aws["role-arn"]' "$CONFIG_FILE")" >> $GITHUB_OUTPUT
+          echo "region=$(jq -r '.aws.region' "$CONFIG_FILE")" >> $GITHUB_OUTPUT
           echo "config=$(jq -c . "$CONFIG_FILE")" >> $GITHUB_OUTPUT
 
   sync-media-to-s3:
@@ -270,7 +279,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::381492306053:role/GitHubActionsS3Access
+          role-to-assume: ${{ needs.pre-check-media.outputs.role_arn }}
           aws-region: ${{ needs.pre-check-media.outputs.region }}
 
       - name: Sync media to S3
