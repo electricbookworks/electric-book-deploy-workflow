@@ -1,6 +1,6 @@
 {
   "name": "@electricbookworks/electric-book-deploy-workflow",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "A deploy workflow plugin used by Electric Book projects and media repos with automated deploys to an Electric Book Server instance and S3 buckets.",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
