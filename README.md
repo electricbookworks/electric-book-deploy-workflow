@@ -19,7 +19,7 @@ A deploy workflow plugin used by Electric Book projects and media repos with aut
 3. Select token.actions.githubusercontent.com for Identity provider.
 4. Select sts.amazonaws.com for Audience.
 5. Enter electricbookworks for GitHub organization (leave repo and branch options blank) and click Next.
-6. Add the AmazonS3FullAccess permission policy and click Next.
+6. Add the AmazonS3FullAccess and CloudFrontFullAccess permission policies and click Next.
 7. Enter GitHubActionsS3Access for Role name and click Create role.
 8. Copy the Role ARN and add this to the aws.role-arn property in `deploy.config.json` (see below).
 
