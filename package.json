@@ -1,0 +1,24 @@
+{
+  "name": "@electricbookworks/electric-book-deploy-workflow",
+  "version": "3.0.0",
+  "description": "A deploy workflow plugin used by Electric Book projects and media repos with automated deploys to an Electric Book Server instance and S3 buckets.",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "first-release": "npx standard-version --first-release  && git push --follow-tags",
+    "release": "standard-version && git push --follow-tags"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/electricbookworks/electric-book-deploy-workflow.git"
+  },
+  "author": "electricbookworks",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/electricbookworks/electric-book-deploy-workflow/issues"
+  },
+  "homepage": "https://github.com/electricbookworks/electric-book-deploy-workflow#readme",
+  "devDependencies": {
+    "standard": "^17.1.2",
+    "standard-version": "^9.5.0"
+  }
+}
